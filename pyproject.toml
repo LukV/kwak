@@ -1,0 +1,33 @@
+[project]
+name = "kwak"
+version = "0.1.0"
+description = "A CLI tool to explore Retrieval-Augmented Generation (RAG) on synthetic 'subsidiedossiers' using DuckDB."
+authors = [{ name="LukV", email="luk.verhelst@vlaanderen.be" }]
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.13"
+
+dependencies = [
+    "ollama>=0.5.1",
+    "pydantic-ai>=0.2.6",
+    "typer>=0.15.4",
+    "ulid-py>=1.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "commitizen>=4.8.2",
+    "mypy>=1.15.0",
+    "pre-commit>=4.2.0",
+    "ruff>=0.11.11",
+]
+
+[project.scripts]
+kwak = "kwak.cli:app"
+
+[tool.uv]
+package = true
+
+# [[tool.mypy.overrides]]
+# module = ["sqlalchemy_pagination.*", "llama_cloud_services.*"]
+# ignore_missing_imports = true

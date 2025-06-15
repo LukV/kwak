@@ -1,0 +1,54 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "🦆 CLI: say",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "kwak.cli",
+            "args": [
+                "say",
+                "meeeeh"
+            ],
+            "justMyCode": true,
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "📊 CLI: generate-data",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "kwak.cli",
+            "args": [
+                "generate-data",
+                "--count",
+                "5"
+            ],
+            "justMyCode": true,
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "🔍 CLI: query",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "kwak.cli",
+            "args": [
+                "query",
+                "Welke subsidiedossiers over erfgoed?"
+            ],
+            "justMyCode": true,
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        }
+    ]
+}
