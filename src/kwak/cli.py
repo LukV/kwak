@@ -1,7 +1,9 @@
 import asyncio
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import duckdb
 import typer
 from rich.console import Console
 from rich.progress import Progress
@@ -11,6 +13,7 @@ if TYPE_CHECKING:
 from kwak.services.factories import GENERATOR_REGISTRY
 
 app = typer.Typer(help="🦆 kwak: A RAG-ready CLI for subsidiedossiers")
+console = Console()
 
 
 @app.command()
@@ -31,8 +34,6 @@ def generate_data(  # noqa: PLR0913
     ),
 ) -> None:
     """Genereer synthetische subsidiedossiers."""
-    console = Console()
-
     if model not in GENERATOR_REGISTRY:
         raise typer.BadParameter(f"Unsupported model: {model}")  # noqa: EM102, TRY003
 
@@ -56,3 +57,49 @@ def generate_data(  # noqa: PLR0913
             f.write(dossier.model_dump_json() + "\n")
 
     console.print(f"✅ [green]Successfully wrote {count} dossiers to {output}[/green]")
+
+
+@app.command()
+def updatedb() -> None:
+    """Update the database with the latest data."""
+    db_path = "data/kwak.db"
+    jsonl_path = Path("data/generated/subsidiedossiers.jsonl")
+    table_name = "dossiers"
+
+    if not jsonl_path.exists():
+        console.print(f"[red]❌ JSONL file not found at {jsonl_path}[/red]")
+        raise typer.Exit(1)
+
+    # Recreate table
+    with Path("queries/create_dossiers.sql").open() as qf:
+        create_stmt = qf.read().replace("$table_name", table_name)
+
+    with duckdb.connect(db_path) as con:
+        con.execute(create_stmt)
+        console.print(f"📥 Inserting data from {jsonl_path.name}...")
+
+        # Read JSONL
+        records = [
+            json.loads(line)
+            for line in jsonl_path.read_text(encoding="utf-8").splitlines()
+        ]
+
+        # Convert dates from string to ISO for DuckDB
+        rows = [
+            (
+                r["id"],
+                r["titel"],
+                r["type"],
+                r["startdatum"],
+                r["einddatum"],
+                r["goedgekeurd_budget"],
+                r["omschrijving"],
+                r["advies"],
+            )
+            for r in records
+        ]
+
+        con.executemany(
+            f"""INSERT INTO {table_name} VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: S608
+            rows,
+        )
