@@ -10,8 +10,6 @@ from kwak.schemas.dossier import SubsidieDossier
 from kwak.services.generators.base import AbstractDossierGenerator
 from kwak.utils import idgen
 
-client = OpenAI(api_key="ollama", base_url=os.getenv("OLLAMA_API_URL"))
-
 
 class OllamaDossierGenerator(AbstractDossierGenerator):
     """Generates subsidy dossiers using a Ollama supported model."""
@@ -20,6 +18,8 @@ class OllamaDossierGenerator(AbstractDossierGenerator):
         """Initialize the OllamaDossierGenerator with a specific model."""
         provider = OpenAIProvider(base_url=os.getenv("OLLAMA_API_URL"))
         self.model = OpenAIModel(model_name, provider=provider)
+        self.model_name = model_name
+        self.client = OpenAI(api_key="ollama", base_url=os.getenv("OLLAMA_API_URL"))
 
     async def generate(
         self, dossier_type: str, start_year: int, end_year: int
@@ -46,8 +46,8 @@ subsidieaanvraag met volgende eigenschappen:
 minstens 1000 en maximaal 10000 tekens
 - advies: een gemotiveerd advies van minstens 1000 en maximaal 2000 tekens
 """
-        completion = client.beta.chat.completions.parse(
-            model="deepseek-r1",
+        completion = self.client.beta.chat.completions.parse(
+            model=self.model_name,
             messages=[
                 {
                     "role": "system",
