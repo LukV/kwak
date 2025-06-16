@@ -1,16 +1,16 @@
 import asyncio
-import json
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import duckdb
 import typer
 from rich.console import Console
 from rich.progress import Progress
 
-if TYPE_CHECKING:
-    from kwak.schemas.dossier import SubsidieDossier
+from kwak.schemas.dossier import SubsidieDossier
+from kwak.services.chunkers.semantic import SemanticChunker
+from kwak.services.chunkers.word_count import WordCountChunker
 from kwak.services.factories import GENERATOR_REGISTRY
+from kwak.utils.files import append_jsonl, load_jsonl, overwrite_jsonl
 
 app = typer.Typer(help="🦆 kwak: A RAG-ready CLI for subsidiedossiers")
 console = Console()
@@ -52,9 +52,7 @@ def generate_data(  # noqa: PLR0913
     asyncio.run(generate_all())
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("a", encoding="utf-8") as f:
-        for dossier in dossiers:
-            f.write(dossier.model_dump_json() + "\n")
+    append_jsonl(output, dossiers)
 
     console.print(f"✅ [green]Successfully wrote {count} dossiers to {output}[/green]")
 
@@ -79,22 +77,21 @@ def updatedb() -> None:
         console.print(f"📥 Inserting data from {jsonl_path.name}...")
 
         # Read JSONL
-        records = [
-            json.loads(line)
-            for line in jsonl_path.read_text(encoding="utf-8").splitlines()
-        ]
+        records = load_jsonl(
+            Path("data/generated/subsidiedossiers.jsonl"), model=SubsidieDossier
+        )
 
         # Convert dates from string to ISO for DuckDB
         rows = [
             (
-                r["id"],
-                r["titel"],
-                r["type"],
-                r["startdatum"],
-                r["einddatum"],
-                r["goedgekeurd_budget"],
-                r["omschrijving"],
-                r["advies"],
+                r.id,
+                r.titel,
+                r.type,
+                r.startdatum,
+                r.einddatum,
+                r.goedgekeurd_budget,
+                r.omschrijving,
+                r.advies,
             )
             for r in records
         ]
@@ -103,3 +100,62 @@ def updatedb() -> None:
             f"""INSERT INTO {table_name} VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: S608
             rows,
         )
+
+
+@app.command()
+def chunk_data(
+    range: str = typer.Option(  # noqa: A002
+        "all",
+        help="Which jsonl objects to parse: 'all', 'first:N' of 'last:N'",
+    ),
+    strategy: str = typer.Option(
+        "semantic",
+        "--strategy",
+        "-s",
+        help="Chunking strategy: 'semantic' (LLM) of 'wordcount' (naïef)",
+    ),
+) -> None:
+    """Split dossiers into semantic chunks and store them as JSONL."""
+    chunker: SemanticChunker | WordCountChunker
+    if strategy == "semantic":
+        chunker = SemanticChunker()
+    elif strategy == "wordcount":
+        chunker = WordCountChunker()
+    else:
+        console.print(
+            "[red]❌ Invalid strategy. Choose 'semantic' or 'wordcount'.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    dossiers = load_jsonl(
+        Path("data/generated/subsidiedossiers.jsonl"), model=SubsidieDossier
+    )
+
+    if range == "all":
+        # If the user specified "all", include all dossiers
+        selected = dossiers
+
+    elif range.startswith("first:"):
+        # If the range starts with "first:", extract the number after the colon
+        # and select the first N dossiers from the list
+        n = int(range.split(":")[1])
+        selected = dossiers[:n]
+
+    elif range.startswith("last:"):
+        # If the range starts with "last:", extract the number after the colon
+        # and select the last N dossiers from the list
+        n = int(range.split(":")[1])
+        selected = dossiers[-n:]
+    else:
+        console.print("[red]❌ Invalid range. Use 'all', 'first:N' of 'last:N'.[/red]")
+        raise typer.Exit(code=1)
+
+    all_chunks = []
+    for dossier in selected:
+        chunks = list(chunker.chunk(dossier))
+        all_chunks.extend(chunks)
+
+    overwrite_jsonl(Path("data/chunks/subsidiedossierchunks.jsonl"), all_chunks)
+    console.print(
+        f"✅ [green]Chunked {len(selected)} dossiers into {len(all_chunks)} chunks[/green]"  # noqa: E501
+    )
